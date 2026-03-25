@@ -1,43 +1,149 @@
 # Cold Outreach MCP
 
-An MCP server that automates cold email outreach — from scraping company websites to sending human-sounding emails and tracking everything in Notion.
+### Your AI-Powered Cold Email Agent — finds companies, writes emails, sends them, logs everything.
+
+> "Stop spending hours manually researching companies and writing outreach emails.
+> Paste your CV once. Let the AI find companies that match your skills, write
+> human-sounding emails, send them, and track everything in Notion — automatically."
 
 ---
 
 ## What It Does
 
-1. **Researches** companies — scrapes their site, finds contact emails, and uses Claude to spot pain points
-2. **Recommends** an email type per company — *Opportunity Pitch* (spotted a problem) or *Role Inquiry* (great fit, want to join)
-3. **Asks you to confirm** — you review and approve or change each recommendation before anything is sent
-4. **Generates emails** that sound like a real person wrote them — short, specific, no buzzwords
-5. **Sends** via your Gmail / Outlook / SMTP with a rate limit between sends
-6. **Logs** every outreach to a Notion database you own
+Cold Outreach MCP is a custom MCP server that turns Claude into a full outreach automation agent.
+You paste your CV once, and Claude can:
+
+1. **Discover** companies that match your skills and background — no manual URL input
+2. **Research** each company — scrapes their site, finds contact emails, spots pain points
+3. **Recommend** an email type per company — *Opportunity Pitch* or *Role Inquiry*
+4. **Ask you to confirm** — you review and approve each recommendation before anything is sent
+5. **Generate** emails that sound like a real person wrote them — short, specific, no buzzwords
+6. **Send** via Gmail / Outlook / any SMTP provider with a rate limit between sends
+7. **Log** every outreach automatically to a Notion database you own
+
+Everything is human-in-the-loop — Claude proposes, you decide, Notion remembers.
+
+---
+
+## Architecture
+
+```
+You (Claude Desktop)
+        │
+        ▼
+┌───────────────────────┐
+│   Cold Outreach MCP   │  ← This repo
+│   (Node.js server)    │
+└────────┬──────────────┘
+         │
+   ┌─────┴──────────────────────┐
+   │                            │
+   ▼                            ▼
+Anthropic API              Notion API
+(Claude for research,      (Outreach Tracker DB
+ email generation,          read & write)
+ company discovery)
+         │
+         ▼
+     SMTP Server
+  (Gmail / Outlook /
+   any SMTP provider)
+```
+
+---
+
+## The 10 MCP Tools
+
+| Tool | What it does |
+|---|---|
+| `setup_notion_db` | One-time migration — adds all required columns to your Notion database |
+| `parse_profile` | Extracts your role, skills, experience and strengths from CV text |
+| `discover_companies` | Finds real companies that match your profile — no manual URL input needed |
+| `find_company_email` | Scrapes a company's site to find a contact email |
+| `research_company` | Analyzes a company — summary, problems spotted, email type recommendation |
+| `generate_email` | Writes one outreach email given your profile, company data, and email type |
+| `send_email` | Sends an email via SMTP |
+| `log_to_notion` | Manually logs an outreach record to Notion |
+| `retry_failed` | Re-sends all emails marked "failed" in your Notion tracker |
+| `bulk_outreach` | Full pipeline for up to 15 companies at once (two-phase: research → confirm → send) |
+
+---
+
+## Notion Database Schema
+
+> You do **not** need to create these columns manually.
+> Run `setup_notion_db` once and it creates everything in your existing database.
+
+| Column | Type | Notes |
+|---|---|---|
+| Company | Title | Company name |
+| Website | URL | Source URL |
+| Email | Email | Contact email used |
+| Type | Select | `opportunity_pitch` / `role_inquiry` |
+| Status | Select | `pending` / `sent` / `failed` / `replied` |
+| Date Sent | Date | ISO date |
+| Notes | Text | Error messages + full email body |
+
+---
+
+## Email Types
+
+**Opportunity Pitch** — Used when research spotted a specific problem on their site.
+> "Your onboarding flow has a few rough edges — I've fixed similar issues before and thought I'd reach out."
+
+**Role Inquiry** — Used when the company looks like a great fit but no clear problem was found.
+> "I'm a Flutter developer and your product caught my eye. Just wanted to see if there's room for someone like me."
+
+Both types are kept under 120 words and written to sound like a real person — not a template.
 
 ---
 
 ## Requirements
 
-- Node.js 18+
-- An [Anthropic API key](https://console.anthropic.com/settings/keys)
-- A [Notion account](https://notion.so) with an integration set up
-- A Gmail or Outlook account (or any SMTP provider)
+| Tool | Version | Download |
+|---|---|---|
+| Node.js | 18 or higher | https://nodejs.org (choose LTS) |
+| Git | Any recent version | https://git-scm.com |
+| Claude Desktop | Latest | https://claude.ai/download |
+| A Notion account | — | https://notion.so |
+
+Verify Node.js and Git are installed by opening a terminal and running:
+
+```bash
+node --version   # should print v18.x.x or higher
+git --version    # should print git version x.x.x
+```
+
+If either says "command not found", install from the links above before continuing.
 
 ---
 
-## Setup
+## Setup Guide
 
-### 1. Clone and install
+### Step 1 — Clone, install and build
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/YOUR_USERNAME/cold-outreach-mcp.git
 cd cold-outreach-mcp
 npm install
 npm run build
 ```
 
+After `npm run build` you should see a `dist/` folder. If you get TypeScript errors, make sure Node.js 18+ is installed.
+
+Note the full path to this folder — you will need it in Step 4:
+
+```bash
+# macOS / Linux
+pwd
+
+# Windows (PowerShell)
+Get-Location
+```
+
 ---
 
-### 2. Get your API keys
+### Step 2 — Get your API keys
 
 **Anthropic (Claude AI)**
 1. Go to [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
@@ -46,57 +152,83 @@ npm run build
 
 **Notion**
 1. Go to [notion.so/my-integrations](https://www.notion.so/my-integrations)
-2. Click **+ New integration**
-3. Give it a name (e.g. "Cold Outreach MCP"), select your workspace
-4. Click **Submit** → copy the **Internal Integration Secret** (starts with `ntn_...` or `secret_...`)
-5. Go to any Notion page where you want the database to live
-6. Click the `...` menu → **Connect to** → select your integration
+2. Click **+ New integration** → give it a name (e.g. "Cold Outreach") → select your workspace
+3. Click **Submit** → copy the **Internal Integration Token** (starts with `ntn_...` or `secret_...`)
 
-**Gmail (App Password)**
+**Gmail App Password**
 1. Your Google account must have 2-Factor Authentication enabled
 2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-3. Select **Mail** → your device → click **Generate**
-4. Copy the 16-character password (e.g. `abcd efgh ijkl mnop`) — use it without spaces
+3. Generate a password for Mail → copy the 16-character code (use it without spaces)
 
-> **Outlook:** Use `smtp.office365.com`, port `587`, and your regular password (or an app password if your org requires it).
+> **Outlook:** Use `smtp.office365.com`, port `587`, and your regular Microsoft password (or an app password if your org requires it).
 
 ---
 
-### 3. Configure your environment
+### Step 3 — Set up your Notion database
+
+1. Go to [notion.so](https://notion.so) and create a new **full-page database** (table view)
+2. Copy its ID from the URL:
+
+```
+https://notion.so/yourworkspace/My-Database-abc123def456?v=...
+                                             ↑
+                                    this is your database ID
+```
+
+The ID is the 32-character string at the end of the path, before `?v=`.
+
+3. Connect your integration to this database:
+   - Open the database in Notion
+   - Click `...` (top right) → **Connections** → **Connect to** → select your integration
+
+Keep the database ID handy — you will use it in Step 4.
+
+---
+
+### Step 4 — Register with Claude Desktop
+
+Locate the Claude Desktop config file for your operating system:
+
+| OS | Config file path |
+|---|---|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+**Open or create the file:**
 
 ```bash
-cp .env.example .env
+# macOS — open in TextEdit
+open -a TextEdit ~/Library/Application\ Support/Claude/claude_desktop_config.json
 ```
 
-Open `.env` and fill in your values:
-
-```env
-ANTHROPIC_API_KEY=sk-ant-...
-
-NOTION_API_KEY=ntn_...
-NOTION_DATABASE_ID=your_database_id   # see step 5 below
-
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=you@gmail.com
-SMTP_PASS=abcdefghijklmnop   # Gmail App Password, no spaces
-
-SENDER_EMAIL=you@gmail.com
-SENDER_NAME=Your Name
+```bash
+# macOS — if the file does not exist yet
+mkdir -p ~/Library/Application\ Support/Claude
+touch ~/Library/Application\ Support/Claude/claude_desktop_config.json
+open -a TextEdit ~/Library/Application\ Support/Claude/claude_desktop_config.json
 ```
 
----
+```bash
+# Linux
+mkdir -p ~/.config/Claude
+nano ~/.config/Claude/claude_desktop_config.json
+```
 
-### 4. Register the MCP server with Claude Desktop
+```powershell
+# Windows (PowerShell)
+New-Item -ItemType Directory -Force -Path "$env:APPDATA\Claude" | Out-Null
+notepad "$env:APPDATA\Claude\claude_desktop_config.json"
+```
 
-Open (or create) `~/Library/Application Support/Claude/claude_desktop_config.json` and add:
+**Paste this into the file**, replacing all placeholder values with your real data:
 
 ```json
 {
   "mcpServers": {
     "cold-outreach": {
       "command": "node",
-      "args": ["/absolute/path/to/cold-outreach-mcp/dist/index.js"],
+      "args": ["/FULL/PATH/TO/cold-outreach-mcp/dist/index.js"],
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
         "NOTION_API_KEY": "ntn_...",
@@ -104,7 +236,7 @@ Open (or create) `~/Library/Application Support/Claude/claude_desktop_config.jso
         "SMTP_HOST": "smtp.gmail.com",
         "SMTP_PORT": "587",
         "SMTP_USER": "you@gmail.com",
-        "SMTP_PASS": "abcdefghijklmnop",
+        "SMTP_PASS": "yourapppassword",
         "SENDER_EMAIL": "you@gmail.com",
         "SENDER_NAME": "Your Name"
       }
@@ -113,43 +245,66 @@ Open (or create) `~/Library/Application Support/Claude/claude_desktop_config.jso
 }
 ```
 
-Restart Claude Desktop after saving.
+Replace `/FULL/PATH/TO/cold-outreach-mcp` with the output of `pwd` from Step 1.
+
+> **Already have other MCP servers?** Add the `"cold-outreach": { ... }` block inside your existing `"mcpServers"` object — do not replace the whole file.
+
+> **Windows path note:** Use double backslashes or forward slashes in the path:
+> `"C:\\Users\\you\\cold-outreach-mcp\\dist\\index.js"` or
+> `"C:/Users/you/cold-outreach-mcp/dist/index.js"`
 
 ---
 
-### 5. Set up the Notion database (one time)
+### Step 5 — Restart Claude Desktop
 
-1. Go to [notion.so](https://notion.so) and create a new **full-page database** (table view)
-2. Copy its ID from the URL:
-   - URL looks like: `https://notion.so/My-Database-abc123def456` or `https://notion.so/{workspace}/{id}?v=...`
-   - The ID is the 32-character string: `abc123def456...`
-3. Paste it into `.env` and your Claude Desktop config as `NOTION_DATABASE_ID`
-4. Make sure your Notion integration is connected to that database page (`...` menu → **Connect to** → your integration)
-5. Restart Claude Desktop, then run:
+Fully quit Claude Desktop (not just close the window — use **Quit** from the menu or taskbar).
+Reopen it. You should see a **🔨 tools icon** in the chat input bar.
+
+Click the icon to confirm all 10 Cold Outreach tools are listed. If you see zero tools or an error, see the Troubleshooting section below.
+
+---
+
+### Step 6 — Run the Notion migration (once)
+
+In Claude, type:
 
 ```
 Use setup_notion_db
 ```
 
-This adds all the required columns to your database. You only need to do this once.
+This adds all required columns to your Notion database. It is safe to run again — it will not duplicate anything.
 
 ---
 
 ## Usage
 
-### Full bulk outreach flow
+### Full workflow
 
 **Step 1 — Parse your profile**
 ```
 Use parse_profile with my CV text:
-[paste your CV or resume here]
+[paste your full CV or resume as plain text here]
 ```
 
-**Step 2 — Research companies (Phase 1)**
+**Step 2 — Discover matching companies**
+```
+Use discover_companies with:
+- profile: [paste the profile JSON from step 1]
+```
+
+Optionally narrow the focus:
+```
+Use discover_companies with:
+- profile: [profile]
+- niche: "fintech startups"
+- count: 10
+```
+
+**Step 3 — Research companies (Phase 1)**
 ```
 Use bulk_outreach with:
-- company_urls: ["https://stripe.com", "https://linear.app", "https://notion.so"]
-- profile: [paste the profile from step 1]
+- company_urls: [paste the company_urls array from discover_companies]
+- profile: [same profile from step 1]
 ```
 
 Claude will scrape each site, analyze them, and show you something like:
@@ -162,20 +317,17 @@ Claude will scrape each site, analyze them, and show you something like:
 2. linear.app
    → Recommended: role_inquiry
    → Reason: Fast-growing team, no clear gap spotted — strong product match
-
-3. notion.so
-   → Recommended: role_inquiry
-   → Reason: Site content is thin, couldn't find a specific problem to pitch
 ```
 
-**Step 3 — Confirm and send (Phase 2)**
+**Step 4 — Confirm and send (Phase 2)**
 
-Tell Claude which type you want for each, then:
+Review the recommendations. Then pass back your confirmations:
+
 ```
 Use bulk_outreach again with:
 - company_urls: [same list]
 - profile: [same profile]
-- confirmations: { "https://stripe.com": "opportunity_pitch", "https://linear.app": "role_inquiry", "https://notion.so": "opportunity_pitch" }
+- confirmations: { "https://stripe.com": "opportunity_pitch", "https://linear.app": "role_inquiry" }
 - researched_companies: [paste the researched_companies array from the phase 1 response]
 ```
 
@@ -183,78 +335,184 @@ Emails are generated, sent, and logged to Notion automatically.
 
 ---
 
-### Individual tools
+### Individual tool commands
 
-| Tool | What it does |
-|---|---|
-| `setup_notion_db` | Adds required columns to your Notion database (run once after setting `NOTION_DATABASE_ID`) |
-| `parse_profile` | Extracts skills/experience from your CV or resume text |
-| `find_company_email` | Scrapes a site to find a contact email |
-| `research_company` | Analyzes a company — summary, problems, recommendation |
-| `generate_email` | Writes one email given profile + company + type |
-| `send_email` | Sends an email via SMTP |
-| `log_to_notion` | Logs an outreach record manually |
-| `retry_failed` | Re-sends all emails marked "failed" in Notion |
-| `bulk_outreach` | Full pipeline for up to 15 companies |
+**Find a contact email for one company:**
+```
+Use find_company_email with website_url: "https://somecompany.com"
+```
+
+**Research one company:**
+```
+Use research_company with website_url: "https://somecompany.com"
+```
+
+**Send a single email:**
+```
+Use send_email with:
+- to: "contact@somecompany.com"
+- subject: "Quick note"
+- body: "Hi, ..."
+```
+
+**Retry all failed sends:**
+```
+Use retry_failed
+```
 
 ---
 
-## Daily limit
+## Daily Limit
 
 The server enforces a max of **15 companies per `bulk_outreach` call** and adds a **2 second delay** between sends to avoid spam filters.
 
 ---
 
-## Email types
+## Testing Without Claude Desktop
 
-**Opportunity Pitch** — Used when the research spotted a specific problem.
-> "Your onboarding flow has a few rough edges — I've fixed similar issues before and thought I'd reach out."
+### Option 1: MCP Inspector (Recommended)
 
-**Role Inquiry** — Used when the company looks like a great fit but no clear problem was found.
-> "I'm a Flutter developer and your product caught my eye. Just wanted to see if there's room for someone like me."
-
-Both types are kept under 120 words and written to sound like a real person — not a template.
-
----
-
-## Notion database
-
-After setup, you'll have a database with these fields:
-
-| Field | Type | Notes |
-|---|---|---|
-| Company | Title | Company name |
-| Website | URL | Source URL |
-| Email | Email | Contact email used |
-| Type | Select | `opportunity_pitch` / `role_inquiry` |
-| Status | Select | `pending` / `sent` / `failed` / `replied` |
-| Date Sent | Date | ISO date |
-| Notes | Text | Error messages + email body |
-
-To mark a reply: open the Notion page and change Status to `replied`.
-
----
-
-## Development
+The MCP Inspector is an official browser-based tool for testing any MCP server interactively — no Claude Desktop required.
 
 ```bash
-npm run dev     # run with tsx (no build step)
-npm run build   # compile TypeScript to dist/
-npm start       # run compiled output
+npm run build
+npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
-Project structure:
+Pass your environment variables so the tools can connect to real services:
+
+```bash
+# macOS / Linux
+ANTHROPIC_API_KEY=sk-ant-... \
+NOTION_API_KEY=ntn_... \
+NOTION_DATABASE_ID=your_id \
+SMTP_HOST=smtp.gmail.com \
+SMTP_PORT=587 \
+SMTP_USER=you@gmail.com \
+SMTP_PASS=yourpassword \
+SENDER_EMAIL=you@gmail.com \
+SENDER_NAME="Your Name" \
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+```powershell
+# Windows (PowerShell)
+$env:ANTHROPIC_API_KEY="sk-ant-..."
+$env:NOTION_API_KEY="ntn_..."
+$env:NOTION_DATABASE_ID="your_id"
+$env:SMTP_HOST="smtp.gmail.com"
+$env:SMTP_PORT="587"
+$env:SMTP_USER="you@gmail.com"
+$env:SMTP_PASS="yourpassword"
+$env:SENDER_EMAIL="you@gmail.com"
+$env:SENDER_NAME="Your Name"
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+The Inspector opens in your browser at `http://localhost:5173`. Click **Connect**, then **Tools** to see and call any tool directly.
+
+---
+
+### Option 2: Smoke test (verify the server starts)
+
+```bash
+# macOS / Linux
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | node dist/index.js
+
+# Windows (PowerShell)
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | node dist/index.js
+```
+
+You should see a JSON response listing all 10 tools. If the server crashes or prints nothing, check your Node.js version with `node --version`.
+
+---
+
+## Troubleshooting
+
+**No 🔨 tools icon in Claude Desktop**
+- Make sure you fully quit (not just closed) and reopened Claude Desktop
+- Check the config file path is correct for your OS — one wrong character breaks it
+- Check the `args` path points to `dist/index.js`, not `src/index.ts`
+- On Windows, make sure backslashes are doubled: `\\`
+
+**Tools icon shows but no Cold Outreach tools**
+- Open Claude Desktop → Settings → Developer — check for error messages next to `cold-outreach`
+- Run the smoke test above to verify the server itself starts correctly
+- Check that `npm run build` completed without errors and `dist/index.js` exists
+
+**`setup_notion_db` fails**
+- Make sure `NOTION_DATABASE_ID` is set correctly in your Claude Desktop config
+- Make sure your Notion integration is connected to the database (not just a page)
+- The database ID is 32 characters — double-check you copied the full string
+
+**Emails not sending**
+- Gmail: make sure you used an App Password (16 chars, no spaces), not your regular password
+- Gmail: 2FA must be enabled on your Google account for App Passwords to work
+- Outlook: use `smtp.office365.com`, port `587`
+- Check `SMTP_USER`, `SMTP_PASS`, and `SENDER_EMAIL` are all set in the Claude Desktop config
+
+**Claude Desktop config file not found**
+The file may not exist yet if you have never configured an MCP server. Create it using the commands in Step 4 above. Make sure the JSON is valid — an extra comma or missing brace will silently break it.
+
+**`discover_companies` returns wrong types of companies**
+Add a `niche` hint to narrow it down:
+```
+Use discover_companies with:
+- profile: [your profile]
+- niche: "B2B SaaS developer tools"
+```
+
+---
+
+## Project Structure
 
 ```
 src/
-├── config/env.ts          — environment variables
+├── config/env.ts          — environment variable loading
 ├── types/index.ts         — shared TypeScript types
-├── prompts/               — Claude prompt templates (easy to tune)
+├── prompts/               — Claude prompt templates
+│   ├── researchPrompt.ts
+│   ├── opportunityPitchPrompt.ts
+│   └── roleInquiryPrompt.ts
 ├── services/              — all business logic
 │   ├── scraper.ts         — website scraping + email extraction
-│   ├── claude.ts          — AI calls (research, email gen, profile parse)
+│   ├── claude.ts          — AI calls (research, email gen, discovery, profile parse)
 │   ├── notion.ts          — Notion read/write
 │   ├── email.ts           — SMTP sending with retry
 │   └── profileParser.ts   — CV/resume parsing
-└── tools/                 — thin MCP tool wrappers (9 tools)
+└── tools/                 — MCP tool wrappers (10 tools)
+    ├── setupNotion.ts
+    ├── parseProfile.ts
+    ├── discoverCompanies.ts
+    ├── findEmail.ts
+    ├── researchCompany.ts
+    ├── generateEmail.ts
+    ├── sendEmail.ts
+    ├── logToNotion.ts
+    ├── retryFailed.ts
+    └── bulkOutreach.ts
 ```
+
+---
+
+## Tech Stack
+
+- **Runtime**: Node.js 18+ with TypeScript
+- **MCP SDK**: `@modelcontextprotocol/sdk` (official Anthropic SDK)
+- **AI**: Anthropic Claude via `@anthropic-ai/sdk` — research, email generation, company discovery
+- **Web scraping**: `axios` + `cheerio`
+- **Email sending**: `nodemailer` (SMTP)
+- **Storage**: Notion REST API (`@notionhq/client`)
+- **Host**: Claude Desktop
+
+---
+
+## License
+
+MIT — free to use, fork, and build on.
+
+---
+
+## Author
+
+Built by **Daniel A.** (THECODEDANIEL)
