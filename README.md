@@ -280,34 +280,23 @@ This adds all required columns to your Notion database. It is safe to run again 
 
 ### Full workflow
 
-**Step 1 — Parse your profile**
+The entire flow starts with a single message to Claude. You never paste URLs manually.
+
+**Step 1 — Kick it off**
+
 ```
-Use parse_profile with my CV text:
-[paste your full CV or resume as plain text here]
+Here is my CV:
+
+[paste your full CV or resume as plain text]
+
+Parse my profile, find 10 companies that match my background, research each one, and show me your recommendations before sending anything.
 ```
 
-**Step 2 — Discover matching companies**
-```
-Use discover_companies with:
-- profile: [paste the profile JSON from step 1]
-```
-
-Optionally narrow the focus:
-```
-Use discover_companies with:
-- profile: [profile]
-- niche: "fintech startups"
-- count: 10
-```
-
-**Step 3 — Research companies (Phase 1)**
-```
-Use bulk_outreach with:
-- company_urls: [paste the company_urls array from discover_companies]
-- profile: [same profile from step 1]
-```
-
-Claude will scrape each site, analyze them, and show you something like:
+Claude will automatically:
+1. Parse your CV into a structured profile
+2. Discover matching companies based on your skills
+3. Scrape and research each company
+4. Return a recommendation per company like this:
 
 ```
 1. stripe.com
@@ -319,19 +308,34 @@ Claude will scrape each site, analyze them, and show you something like:
    → Reason: Fast-growing team, no clear gap spotted — strong product match
 ```
 
-**Step 4 — Confirm and send (Phase 2)**
+**Step 2 — Confirm and send**
 
-Review the recommendations. Then pass back your confirmations:
+Review the recommendations, then tell Claude which type you want per company:
 
 ```
-Use bulk_outreach again with:
-- company_urls: [same list]
-- profile: [same profile]
-- confirmations: { "https://stripe.com": "opportunity_pitch", "https://linear.app": "role_inquiry" }
-- researched_companies: [paste the researched_companies array from the phase 1 response]
+Looks good. Send opportunity_pitch to stripe.com and linear.app, role_inquiry to the rest.
 ```
 
-Emails are generated, sent, and logged to Notion automatically.
+Claude runs phase 2 of `bulk_outreach` — generates the emails, sends them, and logs everything to Notion.
+
+---
+
+### Want to narrow the company search?
+
+Add a niche hint to `discover_companies`:
+
+```
+Parse my CV, then find 10 companies in the "developer tools" space that match my profile.
+[paste CV]
+```
+
+Or use the tool directly:
+```
+Use discover_companies with:
+- profile: [your parsed profile]
+- niche: "fintech startups"
+- count: 10
+```
 
 ---
 
