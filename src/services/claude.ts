@@ -114,6 +114,52 @@ export async function generateEmail(
   return { subject: parsed.subject, body: parsed.body };
 }
 
+// Discovers relevant companies for a given profile using Claude's knowledge.
+// Returns a list of real company URLs tailored to the user's skills and background.
+export async function discoverCompanies(
+  profile: UserProfile,
+  count: number = 10,
+  niche?: string
+): Promise<string[]> {
+  const nicheHint = niche ? `\nFocus specifically on: ${niche}` : "";
+
+  const prompt = `You are helping someone find companies to cold-email for job opportunities or freelance work.
+
+Their profile:
+- Role: ${profile.role}
+- Skills: ${profile.skills.join(", ")}
+- Experience: ${profile.experience.join(" | ")}
+- Strengths: ${profile.strengths.join(", ")}
+${nicheHint}
+
+Find ${count} real companies that would be a strong match for this person. Prioritise:
+- Companies whose product or tech stack matches their skills
+- Smaller or mid-size companies (10–500 people) where one person can make a visible impact
+- Companies known for hiring remotely or having strong engineering cultures
+- Avoid FAANG / mega-corps — they rarely respond to cold outreach
+
+Reply ONLY with valid JSON in this exact shape:
+{
+  "companies": [
+    { "name": "Company Name", "url": "https://company.com", "reason": "one sentence why they're a good fit" }
+  ]
+}
+
+Only include companies you are confident exist and whose URL is correct. No placeholders.`;
+
+  const raw = await ask(prompt);
+
+  let parsed: { companies: Array<{ name: string; url: string; reason: string }> };
+
+  try {
+    parsed = parseJson(raw);
+  } catch {
+    throw new Error("Claude could not generate a company list — try again or add a niche hint.");
+  }
+
+  return parsed.companies.map((c) => c.url);
+}
+
 // Parses a CV or resume text and extracts a structured user profile
 export async function parseProfileText(cvText: string): Promise<UserProfile> {
   const prompt = `Extract structured info from this CV or profile text.

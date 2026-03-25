@@ -1,28 +1,15 @@
 import { Client } from "@notionhq/client";
 import { env } from "../config/env.js";
 const notion = new Client({ auth: env.notionApiKey });
-// Creates the outreach tracking database under a given parent page.
-// parentPageId is passed as a tool argument — not stored in .env.
-// After running, copy the returned ID into NOTION_DATABASE_ID in .env.
-export async function setupDatabase(parentPageId) {
-    // Idempotency: if a database ID is already configured, verify it's still valid
-    if (env.notionDatabaseId) {
-        try {
-            const existing = await notion.databases.retrieve({ database_id: env.notionDatabaseId });
-            return JSON.stringify({
-                already_exists: true,
-                database_id: env.notionDatabaseId,
-                message: "Database already configured — no action taken.",
-                database_title: existing.title?.[0]?.plain_text ?? "Unknown",
-            });
-        }
-        catch {
-            // ID exists in env but is invalid/inaccessible — fall through and create a new one
-        }
-    }
-    const response = await notion.databases.create({
-        parent: { type: "page_id", page_id: parentPageId },
-        title: [{ type: "text", text: { content: "Cold Outreach Tracker" } }],
+// Migrates the database at NOTION_DATABASE_ID — adds all required columns.
+// You create the database on Notion yourself, paste its ID into .env,
+// then call this once to set up the columns. Safe to call again (idempotent).
+export async function setupDatabase() {
+    const dbId = env.notionDatabaseId;
+    if (!dbId)
+        throw new Error("NOTION_DATABASE_ID is not set in .env — create a database on Notion, copy its ID, and add it to .env first.");
+    await notion.databases.update({
+        database_id: dbId,
         properties: {
             Company: { title: {} },
             Website: { url: {} },
@@ -49,7 +36,7 @@ export async function setupDatabase(parentPageId) {
             Notes: { rich_text: {} },
         },
     });
-    return response.id;
+    return dbId;
 }
 // Logs a single outreach record to Notion.
 // emailBody (if provided) is appended to Notes so nothing is silently dropped.

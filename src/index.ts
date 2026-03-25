@@ -13,6 +13,7 @@ import { researchCompanySchema, handleResearchCompany } from "./tools/researchCo
 import { generateEmailSchema, handleGenerateEmail } from "./tools/generateEmail.js";
 import { sendEmailSchema, handleSendEmail } from "./tools/sendEmail.js";
 import { bulkOutreachSchema, handleBulkOutreach } from "./tools/bulkOutreach.js";
+import { discoverCompaniesSchema, handleDiscoverCompanies } from "./tools/discoverCompanies.js";
 import { logToNotionSchema, handleLogToNotion } from "./tools/logToNotion.js";
 import { retryFailedSchema, handleRetryFailed } from "./tools/retryFailed.js";
 
@@ -24,6 +25,7 @@ const TOOLS = [
   researchCompanySchema,
   generateEmailSchema,
   sendEmailSchema,
+  discoverCompaniesSchema,
   bulkOutreachSchema,
   logToNotionSchema,
   retryFailedSchema,
@@ -71,6 +73,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
       case "send_email":
         result = await handleSendEmail(args as { to: string; subject: string; body: string });
+        break;
+
+      case "discover_companies":
+        result = await handleDiscoverCompanies(args as any);
         break;
 
       case "bulk_outreach":

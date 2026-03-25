@@ -3,16 +3,9 @@ export declare const setupNotionSchema: {
     description: string;
     inputSchema: {
         type: string;
-        properties: {
-            parent_page_id: {
-                type: string;
-                description: string;
-            };
-        };
-        required: string[];
+        properties: {};
+        required: never[];
     };
 };
-export declare function handleSetupNotion(args: {
-    parent_page_id: string;
-}): Promise<string>;
+export declare function handleSetupNotion(): Promise<string>;
 //# sourceMappingURL=setupNotion.d.ts.map
