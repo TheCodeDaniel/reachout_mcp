@@ -1,0 +1,27 @@
+{
+  "name": "cold-outreach-mcp",
+  "version": "1.0.0",
+  "description": "AI-powered cold outreach MCP server — research, write, and send human-sounding emails",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@modelcontextprotocol/sdk": "^1.5.0",
+    "@notionhq/client": "^2.2.15",
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "nodemailer": "^6.9.15"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^6.4.16",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
