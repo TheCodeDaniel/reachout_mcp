@@ -1,273 +1,142 @@
-Alright — let's design this like a **real production-level MCP**.
-This will be **clean, scalable, and contest-worthy**.
-
-I'll structure this like **real engineering documentation** so you can copy directly.
+# Cold Outreach MCP — Production Architecture (Node.js / TypeScript)
 
 ---
 
-# Cold Outreach MCP — Production Architecture (Node.js)
+## 1. Problem
 
-# 1. Project Overview
+Developers, designers, and freelancers send cold outreach emails manually:
 
-## Problem
+- Find company
+- Find email
+- Research company
+- Write email
+- Send email
+- Track status
 
-Developers, designers, and freelancers send **cold outreach emails** to companies manually:
-
-* Find company
-* Find email
-* Research company
-* Write email
-* Send email
-* Track status
-
-This is slow and painful.
+This is slow, repetitive, and the emails usually sound robotic.
 
 ---
 
-## Solution
+## 2. Solution
 
-A **Local MCP Server** that:
+A **Local MCP Server** that automates the full cold outreach pipeline:
 
-* Finds companies
-* Finds emails
-* Researches company
-* Generates AI email (Claude)
-* Sends email
-* Logs everything to Notion
-
----
-
-# 2. Core Features
-
-## MVP Features
-
-### 1. Setup Notion Database
-
-Auto-create database schema like migrations
-
-### 2. Profile Parsing
-
-Accept:
-
-* CV file
-* Resume text
-* Profile text
-
-Extract:
-
-* Skills
-* Experience
-* Role
-* Strengths
+- Scrapes and researches companies (up to 15/day)
+- Finds real contact emails
+- Recommends the best email type per company (based on what it found)
+- Lets the user confirm or override per company
+- Generates emails that sound like a real human wrote them
+- Sends emails via SMTP/Gmail/Outlook
+- Logs everything to Notion
 
 ---
 
-### 3. Company Research
+## 3. Core Rules & Principles
 
-AI will:
+### Email Tone
+- Short sentences. Casual but professional.
+- No buzzwords. No "I hope this email finds you well."
+- No corporate fluff. No AI-sounding language.
+- Reads like a real person reaching out — not a template.
 
-* Visit website
-* Analyze product
-* Find issues
-* Suggest improvements
+### Daily Limit
+- Max **15 companies per run**
+- Rate limiting between sends (2s delay minimum) to avoid spam flags
+
+### Smart Email Type Selection
+- After scraping all companies, the system **pauses before generating**
+- It presents a summary of each company with a **recommended email type** and a reason
+- The user confirms or overrides each one
+- Then emails are generated based on confirmed choices
 
 ---
 
-### 4. AI Email Generation
+## 4. Email Types
 
-Two Modes:
-
-### Mode 1 — Opportunity Pitch
+### Type 1 — Opportunity Pitch
+Used when: the company has a visible problem, friction, or gap you can address.
 
 Example:
+> "Your onboarding flow has a few rough edges — I've helped fix similar issues before and thought I'd reach out."
 
-"Your checkout page is slow… I can help optimize performance"
-
----
-
-### Mode 2 — Role Inquiry
+### Type 2 — Role Inquiry
+Used when: the company looks like a great fit but no obvious pain point was found.
 
 Example:
-
-"I'm a Flutter developer… I'd love to join your team"
-
----
-
-### 5. Auto Email Finder
-
-System tries:
-
-* [contact@domain.com](mailto:contact@domain.com)
-* [info@domain.com](mailto:info@domain.com)
-* [careers@domain.com](mailto:careers@domain.com)
-* [hello@domain.com](mailto:hello@domain.com)
-
-Also:
-
-* scrape website
-* check footer
-* check contact page
+> "I'm a Flutter developer and your product caught my eye. Just wanted to reach out and see if there's room for someone like me."
 
 ---
 
-### 6. Bulk Outreach
-
-User passes:
-
-* list of URLs
-* list of companies
-
-System processes all.
-
----
-
-### 7. Send Email
-
-Using:
-
-* SMTP
-* Gmail
-* Outlook
-
----
-
-### 8. Notion Logging
-
-Every email gets logged:
-
-* company
-* email
-* status
-* message type
-* date
-
----
-
-# 3. Killer Features
-
-## Bulk Outreach
-
-Example:
-
-User:
+## 5. Full Workflow
 
 ```
-send to:
-stripe.com
-notion.so
-linear.app
-```
+User provides:
+  - Their profile (CV / resume text / skills)
+  - List of company URLs (max 15)
 
-System:
+  ↓
 
-* finds emails
-* researches
-* sends all
+1. parse_profile
+   → Extract: skills, experience, role, strengths
 
----
+  ↓
 
-## Auto Email Finder
+2. bulk_outreach (orchestrator)
+   For each company:
+     → find_company_email
+     → research_company
 
-Scrapes:
+  ↓
 
-* contact page
-* footer
-* meta tags
+3. Recommendation Step (interactive pause)
+   → Show user: company + scraped summary + recommended type + reason
+   → User confirms or overrides type per company
 
----
+  ↓
 
-## Retry Failed Emails
+4. generate_email (per company)
+   → Uses confirmed type + profile + research data
+   → Produces human-sounding email
 
-If email fails:
+  ↓
 
-* retry 2 times
-* log failure
+5. send_email (per company)
+   → SMTP / Gmail / Outlook via nodemailer
+   → 2s delay between sends
+   → Retry up to 2x on failure
 
----
+  ↓
 
-## Future Feature (Reserved)
-
-Email follow-ups:
-
-* send after 3 days
-* send after 7 days
-
----
-
-# 4. Tech Stack (Final)
-
-## Core
-
-Node.js (TypeScript recommended)
-
----
-
-## Libraries
-
-### MCP
-
-Use:
-
-```
-@modelcontextprotocol/sdk
+6. log_to_notion
+   → Log: company, email, type, status, date, notes
 ```
 
 ---
 
-### AI
+## 6. MCP Tools
 
-Claude API
-
-```
-@anthropic-ai/sdk
-```
-
----
-
-### Email
-
-```
-nodemailer
-```
+| Tool | Input | Output |
+|---|---|---|
+| `setup_notion_db` | — | Creates DB schema in Notion |
+| `parse_profile` | CV path or text | `{ skills, experience, role }` |
+| `find_company_email` | `website_url` | `email` (scraped or guessed) |
+| `research_company` | `website_url` | `{ summary, problems, suggestions, recommended_type, reason }` |
+| `generate_email` | `profile, company, type` | `email_body` (human tone) |
+| `send_email` | `to, subject, body` | `{ success, message_id }` |
+| `bulk_outreach` | `company_list[]` (max 15) | Runs full pipeline per company |
+| `log_to_notion` | outreach record | Notion page created |
+| `retry_failed` | — | Retries all `failed` entries in Notion |
 
 ---
 
-### Scraping
-
-Use:
-
-```
-axios
-cheerio
-playwright (optional advanced)
-```
-
----
-
-### Notion
-
-```
-@notionhq/client
-```
-
----
-
-### Env
-
-```
-dotenv
-```
-
----
-
-# 5. Project Structure (Production)
+## 7. Project Structure
 
 ```
 cold-outreach-mcp/
-
-├── src/
 │
-│   ├── tools/
+├── src/
+│   │
+│   ├── tools/                  # MCP tool definitions (thin layer, calls services)
 │   │   ├── setupNotion.ts
 │   │   ├── parseProfile.ts
 │   │   ├── findEmail.ts
@@ -277,220 +146,71 @@ cold-outreach-mcp/
 │   │   ├── bulkOutreach.ts
 │   │   ├── logToNotion.ts
 │   │   └── retryFailed.ts
-│
-│   ├── services/
-│   │   ├── claude.ts
-│   │   ├── notion.ts
-│   │   ├── email.ts
-│   │   ├── scraper.ts
-│   │   └── profileParser.ts
-│
+│   │
+│   ├── services/               # Business logic (each file stays under 400 lines)
+│   │   ├── claude.ts           # Claude API calls (research + email generation)
+│   │   ├── notion.ts           # Notion DB read/write
+│   │   ├── email.ts            # nodemailer send logic
+│   │   ├── scraper.ts          # axios + cheerio scraping
+│   │   └── profileParser.ts    # CV/text parsing logic
+│   │
+│   ├── prompts/                # Claude prompt templates (separated from logic)
+│   │   ├── researchPrompt.ts
+│   │   ├── opportunityPitchPrompt.ts
+│   │   └── roleInquiryPrompt.ts
+│   │
 │   ├── types/
-│   │   └── index.ts
-│
+│   │   └── index.ts            # All shared TypeScript types/interfaces
+│   │
 │   ├── config/
-│   │   └── env.ts
-│
-│   └── index.ts
+│   │   └── env.ts              # Env var loading + validation
+│   │
+│   └── index.ts                # MCP server entry point
 │
 ├── .env
 ├── package.json
+├── tsconfig.json
 └── README.md
 ```
 
-Production-ready structure.
+### Architecture Rules
+- **Tools** = thin wrappers. They validate input and call services.
+- **Services** = all real logic lives here.
+- **Prompts** = Claude prompt strings are isolated in their own files. Easy to tune.
+- **No file exceeds 400 lines.** Split into sub-services if needed.
+- **Clean comments** on every non-obvious function — no comment noise on simple code.
 
 ---
 
-# 6. MCP Tools Design
+## 8. Notion Database Schema
 
-## setup_notion_db
-
-Creates database
-
-Fields:
-
-* Company Name
-* Website
-* Email
-* Status
-* Type
-* Date Sent
-* Notes
+| Field | Type | Notes |
+|---|---|---|
+| Company | Title | Company name |
+| Website | URL | Source URL |
+| Email | Email | Contact email found |
+| Type | Select | `opportunity_pitch` / `role_inquiry` |
+| Status | Select | `pending` / `sent` / `failed` / `replied` |
+| Date Sent | Date | Timestamp of send |
+| Notes | Text | Error messages, extra context |
 
 ---
 
-## parse_profile
+## 9. Tech Stack
 
-Input:
-
-* CV path
-* text
-
-Output:
-
-```
-{
-  skills: [],
-  experience: [],
-  role: ""
-}
-```
+| Layer | Library |
+|---|---|
+| MCP | `@modelcontextprotocol/sdk` |
+| AI | `@anthropic-ai/sdk` (Claude) |
+| Email | `nodemailer` |
+| Scraping | `axios` + `cheerio` |
+| Notion | `@notionhq/client` |
+| Config | `dotenv` |
+| Language | TypeScript (Node.js) |
 
 ---
 
-## find_company_email
-
-Input:
-
-```
-website_url
-```
-
-Output:
-
-```
-email
-```
-
----
-
-## research_company
-
-Input:
-
-```
-website_url
-```
-
-Output:
-
-```
-{
- product_summary,
- problems,
- suggestions
-}
-```
-
----
-
-## generate_email
-
-Input:
-
-```
-profile
-company
-type
-```
-
-Output:
-
-```
-email_body
-```
-
----
-
-## send_email
-
-Input:
-
-```
-email
-subject
-body
-```
-
-Output:
-
-```
-success
-```
-
----
-
-## bulk_outreach
-
-Input:
-
-```
-company_list
-```
-
-Runs:
-
-* find email
-* research
-* generate
-* send
-
----
-
-## log_to_notion
-
-Logs everything.
-
----
-
-# 7. Workflow
-
-## Full Flow
-
-```
-User Input
-   ↓
-parse_profile
-   ↓
-bulk_outreach
-   ↓
-find_email
-   ↓
-research_company
-   ↓
-generate_email
-   ↓
-send_email
-   ↓
-log_to_notion
-```
-
-Clean architecture.
-
----
-
-# 8. Notion Database Schema
-
-| Field     | Type   |
-| --------- | ------ |
-| Company   | Title  |
-| Website   | URL    |
-| Email     | Email  |
-| Type      | Select |
-| Status    | Select |
-| Date Sent | Date   |
-| Notes     | Text   |
-
----
-
-# Status Options
-
-* pending
-* sent
-* failed
-* replied
-
----
-
-# Type Options
-
-* opportunity_pitch
-* role_inquiry
-
----
-
-# 9. Environment Variables
+## 10. Environment Variables
 
 ```
 ANTHROPIC_API_KEY=
@@ -508,128 +228,67 @@ SENDER_EMAIL=
 
 ---
 
-# 10. Claude Prompt Design
+## 11. Claude Prompt Guidelines
 
-## Opportunity Pitch Prompt
+### Research Prompt
+- Summarize what the company does (2–3 sentences max)
+- Identify real pain points or gaps (be specific, not generic)
+- Suggest how the user could help
+- Recommend email type: `opportunity_pitch` or `role_inquiry` with a short reason
 
-Claude should:
+### Opportunity Pitch Prompt
+- Start with something specific you noticed (not generic praise)
+- Mention one concrete problem
+- Offer help without overselling
+- Keep it under 120 words
+- Sound like a real person, not a marketer
 
-* analyze company
-* find issues
-* propose help
-
----
-
-## Role Inquiry Prompt
-
-Claude should:
-
-* introduce user
-* highlight skills
-* request opportunity
-
----
-
-# 11. Production Considerations
-
-## Rate Limiting
-
-Avoid:
-
-* sending too many emails
-
-Solution:
-
-* add delay
-
-Example:
-
-```
-2 seconds between emails
-```
+### Role Inquiry Prompt
+- Brief intro — who you are, what you do
+- One line on why this company specifically caught your eye
+- Express interest in contributing
+- Keep it under 100 words
+- Casual and direct
 
 ---
 
-## Error Handling
+## 12. Production Considerations
 
-Try:
+### Rate Limiting
+- 2 second delay between each email send
+- Respect the 15 companies/day cap
 
-* retry failed emails
+### Error Handling
+- Each step wrapped in try/catch
+- Failed sends logged to Notion with error notes
+- `retry_failed` tool re-attempts all `failed` Notion entries (max 2 retries per company)
 
----
-
-## Logging
-
-Console logs:
-
-```
-Sending to Stripe...
-Success
-```
-
----
-
-# 12. Future UI (Optional Later)
-
-You can add:
-
-* Dashboard
-* Analytics
-* Outreach history
-
-Stack:
-
-Frontend:
-
-* Next.js
-
-Backend:
-
-* Same MCP
+### Logging
+- Console logs at each step for visibility:
+  ```
+  [1/5] Researching stripe.com...
+  [1/5] Email found: contact@stripe.com
+  [1/5] Recommended type: opportunity_pitch — checkout friction detected
+  [1/5] Sending email...
+  [1/5] ✓ Sent. Logged to Notion.
+  ```
 
 ---
 
-# 13. Future Features
+## 13. Future Features (Not in MVP)
 
-* Email followups
-* Analytics
-* LinkedIn scraping
-* Company discovery
-
----
-
-# 14. Why This Can Win
-
-Because:
-
-* Real problem
-* Real automation
-* Clean architecture
-* Notion integration
-* AI usage
-
-This is **contest-level strong**.
+- Email follow-ups (day 3, day 7)
+- LinkedIn profile scraping
+- Company discovery (find companies automatically by niche)
+- Analytics dashboard (Next.js frontend)
+- Reply detection + status auto-update
 
 ---
 
-# Final Rating
+## 14. Why This Works
 
-Idea: **9.6 / 10**
-
-Winning Potential: **Very High**
-
----
-
-# Next Step
-
-We should start with:
-
-1. Setup project
-2. Setup MCP server
-3. Build first tool
-
-Say:
-
-**"Let's start setup"**
-
-and we'll begin building immediately.
+- Solves a real, painful problem
+- AI does the heavy lifting but the user stays in control
+- Emails sound human — not AI-generated spam
+- Notion gives a clean outreach CRM out of the box
+- Clean, extensible architecture that can grow
