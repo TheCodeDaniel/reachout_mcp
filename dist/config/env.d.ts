@@ -2,7 +2,6 @@ export declare const env: {
     anthropicApiKey: string;
     notionApiKey: string;
     notionDatabaseId: string;
-    notionParentPageId: string;
     smtpHost: string;
     smtpPort: number;
     smtpUser: string;

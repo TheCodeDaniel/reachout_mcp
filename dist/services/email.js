@@ -11,6 +11,10 @@ let transporter = null;
 function getTransporter() {
     if (transporter)
         return transporter;
+    // Validate SMTP config here (lazily) so the server can start without them
+    if (!env.smtpUser || !env.smtpPass || !env.senderEmail) {
+        throw new Error("SMTP_USER, SMTP_PASS, and SENDER_EMAIL must be set in .env before sending emails");
+    }
     transporter = nodemailer.createTransport({
         host: env.smtpHost,
         port: env.smtpPort,

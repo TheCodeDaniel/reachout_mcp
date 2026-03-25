@@ -1,1 +1,1 @@
-{"version":3,"file":"setupNotion.d.ts","sourceRoot":"","sources":["../../src/tools/setupNotion.ts"],"names":[],"mappings":"AAGA,eAAO,MAAM,iBAAiB;;;;;;;;CAS7B,CAAC;AAGF,wBAAsB,iBAAiB,IAAI,OAAO,CAAC,MAAM,CAAC,CAOzD"}
+{"version":3,"file":"setupNotion.d.ts","sourceRoot":"","sources":["../../src/tools/setupNotion.ts"],"names":[],"mappings":"AAEA,eAAO,MAAM,iBAAiB;;;;;;;;;;;;;CAe7B,CAAC;AAEF,wBAAsB,iBAAiB,CAAC,IAAI,EAAE;IAAE,cAAc,EAAE,MAAM,CAAA;CAAE,GAAG,OAAO,CAAC,MAAM,CAAC,CAgBzF"}

@@ -1,4 +1,4 @@
-import type { UserProfile, TypeConfirmations } from "../types/index.js";
+import type { UserProfile, CompanyResearch, TypeConfirmations } from "../types/index.js";
 export declare const bulkOutreachSchema: {
     name: string;
     description: string;
@@ -49,6 +49,13 @@ export declare const bulkOutreachSchema: {
                     enum: string[];
                 };
             };
+            researched_companies: {
+                type: string;
+                description: string;
+                items: {
+                    type: string;
+                };
+            };
         };
         required: string[];
     };
@@ -57,5 +64,6 @@ export declare function handleBulkOutreach(args: {
     company_urls: string[];
     profile: UserProfile;
     confirmations?: TypeConfirmations;
+    researched_companies?: CompanyResearch[];
 }): Promise<string>;
 //# sourceMappingURL=bulkOutreach.d.ts.map

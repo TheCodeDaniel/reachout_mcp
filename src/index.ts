@@ -50,7 +50,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case "setup_notion_db":
-        result = await handleSetupNotion();
+        result = await handleSetupNotion(args as { parent_page_id: string });
         break;
 
       case "parse_profile":

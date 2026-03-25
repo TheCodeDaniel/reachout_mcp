@@ -6,14 +6,17 @@ const MAX_COMPANIES = 15;
 // ─── Tool schema ──────────────────────────────────────────────────────────────
 export const bulkOutreachSchema = {
     name: "bulk_outreach",
-    description: `Orchestrates the full cold outreach pipeline for a list of companies (max ${MAX_COMPANIES}/day).
+    description: `Orchestrates the full cold outreach pipeline for up to ${MAX_COMPANIES} companies per day.
 
-Two-phase flow:
-1. RESEARCH PHASE (no confirmations provided): Scrapes and analyzes all companies, returns recommendations for each.
-   Show these to the user and ask which email type they want per company.
+TWO-PHASE FLOW:
 
-2. EXECUTE PHASE (confirmations provided): Generates emails, sends them, and logs everything to Notion.
-   Pass the confirmations map after the user reviews the recommendations.`,
+PHASE 1 — Research (call without confirmations or researched_companies):
+  Scrapes + analyzes all companies and returns recommendations.
+  Present these to the user so they can confirm or change the email type for each.
+
+PHASE 2 — Execute (call with confirmations + researched_companies from phase 1):
+  Generates emails, sends them, and logs everything to Notion.
+  Pass back the researched_companies array from the phase 1 response to avoid re-scraping.`,
     inputSchema: {
         type: "object",
         properties: {
@@ -36,40 +39,45 @@ Two-phase flow:
             },
             confirmations: {
                 type: "object",
-                description: "Map of company URL → email type. Only provide this in phase 2, after the user has reviewed recommendations. Example: { 'https://stripe.com': 'opportunity_pitch' }",
+                description: "PHASE 2 only. Map of company URL → chosen email type. Example: { 'https://stripe.com': 'opportunity_pitch' }",
                 additionalProperties: {
                     type: "string",
                     enum: ["opportunity_pitch", "role_inquiry"],
                 },
+            },
+            researched_companies: {
+                type: "array",
+                description: "PHASE 2 only. Pass the recommendations array returned from phase 1 to skip re-scraping.",
+                items: { type: "object" },
             },
         },
         required: ["company_urls", "profile"],
     },
 };
 // ─── Phase 1: Research all companies ─────────────────────────────────────────
-async function researchPhase(urls, _profile) {
+async function researchPhase(urls) {
     const results = [];
     for (let i = 0; i < urls.length; i++) {
         const url = urls[i];
-        console.log(`[bulk] [${i + 1}/${urls.length}] Researching ${url}...`);
+        console.error(`[bulk] [${i + 1}/${urls.length}] Researching ${url}...`);
         try {
             const scraped = await scrapeCompany(url);
             const research = await researchCompany(scraped);
             results.push(research);
-            console.log(`[bulk] [${i + 1}/${urls.length}] ✓ Recommended: ${research.recommendedType}`);
+            console.error(`[bulk] [${i + 1}/${urls.length}] ✓ Recommended: ${research.recommendedType}`);
         }
         catch (err) {
             console.error(`[bulk] [${i + 1}/${urls.length}] Failed to research ${url}:`, err);
-            // Push a minimal stub so the count stays consistent
+            // Push a stub so the count stays consistent and users see what failed
             results.push({
                 url,
                 name: url,
                 email: "",
-                summary: "Could not scrape this site",
+                summary: "Could not scrape or analyze this site",
                 problems: [],
                 suggestions: [],
                 recommendedType: "role_inquiry",
-                reason: "Scraping failed",
+                reason: "Research failed — scraping or AI call errored out",
             });
         }
     }
@@ -81,10 +89,9 @@ async function executePhase(researched, profile, confirmations) {
     for (let i = 0; i < researched.length; i++) {
         const company = researched[i];
         const chosenType = confirmations[company.url] ?? company.recommendedType;
-        console.log(`[bulk] [${i + 1}/${researched.length}] Sending to ${company.name} (${chosenType})...`);
-        // Must have an email to send to
+        console.error(`[bulk] [${i + 1}/${researched.length}] Sending to ${company.name} (${chosenType})...`);
         if (!company.email) {
-            console.warn(`[bulk] [${i + 1}] No email for ${company.name} — skipping`);
+            console.error(`[bulk] [${i + 1}] No email for ${company.name} — skipping`);
             summary.push({ company: company.name, status: "skipped — no email found" });
             continue;
         }
@@ -95,7 +102,7 @@ async function executePhase(researched, profile, confirmations) {
         }
         catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            summary.push({ company: company.name, status: `failed (email gen): ${msg}` });
+            summary.push({ company: company.name, status: `failed (email generation): ${msg}` });
             continue;
         }
         // Send it
@@ -104,8 +111,8 @@ async function executePhase(researched, profile, confirmations) {
         const notes = sendResult.success
             ? `messageId: ${sendResult.messageId}`
             : `error: ${sendResult.error}`;
-        console.log(`[bulk] [${i + 1}] ${sendResult.success ? "✓" : "✗"} ${company.name}`);
-        // Log to Notion
+        console.error(`[bulk] [${i + 1}] ${sendResult.success ? "✓" : "✗"} ${company.name}`);
+        // Log to Notion regardless of send outcome
         let notionPageId;
         try {
             notionPageId = await logRecord({
@@ -116,14 +123,14 @@ async function executePhase(researched, profile, confirmations) {
                 status,
                 dateSent: new Date().toISOString().split("T")[0],
                 notes,
-                emailBody: generated.body,
+                emailBody: generated.body, // stored in Notion Notes field
             });
         }
         catch (err) {
             console.error(`[bulk] Notion log failed for ${company.name}:`, err);
         }
         summary.push({ company: company.name, status, notionPageId });
-        // Pause between sends to avoid spam filters
+        // Pause between sends to stay off spam filters
         if (i < researched.length - 1) {
             await new Promise((r) => setTimeout(r, BULK_SEND_DELAY_MS));
         }
@@ -132,12 +139,10 @@ async function executePhase(researched, profile, confirmations) {
 }
 // ─── Main handler ─────────────────────────────────────────────────────────────
 export async function handleBulkOutreach(args) {
-    // Enforce the daily limit
     const urls = args.company_urls.slice(0, MAX_COMPANIES);
-    // ── Phase 1: Research only ──
+    // ── Phase 1: Research only (no confirmations given) ──
     if (!args.confirmations) {
-        const researched = await researchPhase(urls, args.profile);
-        // Format recommendations clearly so Claude can present them to the user
+        const researched = await researchPhase(urls);
         const recommendations = researched.map((r) => ({
             url: r.url,
             name: r.name,
@@ -149,20 +154,26 @@ export async function handleBulkOutreach(args) {
         }));
         return JSON.stringify({
             phase: "research_complete",
-            message: "Research done. Review the recommendations below and confirm which email type you want for each company. Then call bulk_outreach again with the 'confirmations' map.",
+            message: "Research done. Review recommendations below and confirm the email type for each company. Then call bulk_outreach again with 'confirmations' and pass back 'researched_companies' to avoid re-scraping.",
             recommendations,
+            // Return the full research data so phase 2 can reuse it
+            researched_companies: researched,
         });
     }
     // ── Phase 2: Execute with confirmed types ──
-    // Re-run research to get fresh data (or in a real app you'd cache it)
-    const researched = await researchPhase(urls, args.profile);
+    // Prefer the research data passed back from phase 1 to avoid re-scraping
+    const researched = args.researched_companies && args.researched_companies.length > 0
+        ? args.researched_companies
+        : await researchPhase(urls);
     const results = await executePhase(researched, args.profile, args.confirmations);
     const sent = results.filter((r) => r.status === "sent").length;
     const failed = results.filter((r) => r.status.startsWith("failed")).length;
+    const skipped = results.filter((r) => r.status.startsWith("skipped")).length;
     return JSON.stringify({
         phase: "execution_complete",
         sent,
         failed,
+        skipped,
         results,
     });
 }
