@@ -74,7 +74,7 @@ Open `.env` and fill in your values:
 ANTHROPIC_API_KEY=sk-ant-...
 
 NOTION_API_KEY=ntn_...
-NOTION_DATABASE_ID=          # leave empty for now
+NOTION_DATABASE_ID=your_database_id   # see step 5 below
 
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
@@ -100,7 +100,7 @@ Open (or create) `~/Library/Application Support/Claude/claude_desktop_config.jso
       "env": {
         "ANTHROPIC_API_KEY": "sk-ant-...",
         "NOTION_API_KEY": "ntn_...",
-        "NOTION_DATABASE_ID": "",
+        "NOTION_DATABASE_ID": "your_database_id",
         "SMTP_HOST": "smtp.gmail.com",
         "SMTP_PORT": "587",
         "SMTP_USER": "you@gmail.com",
@@ -117,20 +117,21 @@ Restart Claude Desktop after saving.
 
 ---
 
-### 5. Create the Notion database (one time)
+### 5. Set up the Notion database (one time)
 
-In Claude, run:
+1. Go to [notion.so](https://notion.so) and create a new **full-page database** (table view)
+2. Copy its ID from the URL:
+   - URL looks like: `https://notion.so/My-Database-abc123def456` or `https://notion.so/{workspace}/{id}?v=...`
+   - The ID is the 32-character string: `abc123def456...`
+3. Paste it into `.env` and your Claude Desktop config as `NOTION_DATABASE_ID`
+4. Make sure your Notion integration is connected to that database page (`...` menu → **Connect to** → your integration)
+5. Restart Claude Desktop, then run:
 
 ```
-Use setup_notion_db with parent_page_id = <your page ID>
+Use setup_notion_db
 ```
 
-To get your page ID:
-- Open the Notion page where you want the database
-- Copy the URL: `https://notion.so/My-Page-abc123def456`
-- The ID is the last part: `abc123def456`
-
-The tool will return a `database_id`. Copy it into your `.env` (and Claude Desktop config) as `NOTION_DATABASE_ID`, then restart Claude Desktop.
+This adds all the required columns to your database. You only need to do this once.
 
 ---
 
@@ -186,7 +187,7 @@ Emails are generated, sent, and logged to Notion automatically.
 
 | Tool | What it does |
 |---|---|
-| `setup_notion_db` | Creates the tracking database in Notion (run once) |
+| `setup_notion_db` | Adds required columns to your Notion database (run once after setting `NOTION_DATABASE_ID`) |
 | `parse_profile` | Extracts skills/experience from your CV or resume text |
 | `find_company_email` | Scrapes a site to find a contact email |
 | `research_company` | Analyzes a company — summary, problems, recommendation |
